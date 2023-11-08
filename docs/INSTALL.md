@@ -15,12 +15,12 @@ conda activate detic
 conda install pytorch torchvision torchaudio cudatoolkit=11.1 -c pytorch-lts -c nvidia
 
 # under your working directory
-git clone git@github.com:facebookresearch/detectron2.git
+git clone https://github.com/darkquesh/detectron2.git
 cd detectron2
 pip install -e .
 
 cd ..
-git clone https://github.com/facebookresearch/Detic.git --recurse-submodules
+git clone https://github.com/darkquesh/Detic.git --recurse-submodules
 cd Detic
 pip install -r requirements.txt
 ```
