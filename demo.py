@@ -127,6 +127,43 @@ def test_opencv_video_format(codec, file_ext):
             return True
         return False
 
+# Logging added
+def out_log(labels: list, confidence: bool):
+    idx = 0
+
+    log_name = 'run_log.txt'
+
+    if confidence == False:     ## Not including prediction percentages
+        with open(log_name, 'w') as f:
+            for line in labels:
+                for chr in line:
+                    if chr.isdigit():
+                        idx = line.index(chr)
+                        idx -= 1                        # Dont include the first number
+
+                f.write(f"{str(line[0 : idx])}\n")      # idx-1 -> dont include the space at the end
+    else:                       
+        with open(log_name, 'w') as f:
+            for line in labels:
+                f.write(f"{line}\n")    # idx-1 -> dont include the space at the end
+
+    return log_name
+
+def log_json(txt_input: str):
+    import json
+
+    with open(txt_input, 'r') as file:
+        items = [line.strip() for line in file.readlines()]
+
+    data = {
+        "totalItems": len(items),
+        "objects": items
+    }
+
+    json_output = 'run_log.json'
+
+    with open(json_output, 'w') as json_file:
+        json.dump(data, json_file)
 
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
@@ -146,7 +183,7 @@ if __name__ == "__main__":
         for path in tqdm.tqdm(args.input, disable=not args.output):
             img = read_image(path, format="BGR")
             start_time = time.time()
-            predictions, visualized_output = demo.run_on_image(img)
+            predictions, visualized_output, labels = demo.run_on_image(img)
             logger.info(
                 "{}: {} in {:.2f}s".format(
                     path,
@@ -156,6 +193,16 @@ if __name__ == "__main__":
                     time.time() - start_time,
                 )
             )
+            
+            #print(predictions)
+            print(labels)
+            print(type(labels))
+
+            txt_file = ''
+            txt_file = out_log(labels, confidence=False)
+            log_json(txt_file)
+            
+            #print(predictions["instances"].pred_classes)
 
             if args.output:
                 if os.path.isdir(args.output):
@@ -170,6 +217,7 @@ if __name__ == "__main__":
                 cv2.imshow(WINDOW_NAME, visualized_output.get_image()[:, :, ::-1])
                 if cv2.waitKey(0) == 27:
                     break  # esc to quit
+        
     elif args.webcam:
         assert args.input is None, "Cannot have both --input and --webcam!"
         assert args.output is None, "output not yet supported with --webcam!"
