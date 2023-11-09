@@ -143,7 +143,7 @@ def out_log(labels: list, confidence: bool):
 
                 f.write(f"{str(line[0 : idx])}\n")      # idx-1 -> dont include the space at the end
     else:                       
-        with open(log_name, 'w') as f:
+        with open(log_name, 'a+') as f:
             for line in labels:
                 f.write(f"{line}\n")    # idx-1 -> dont include the space at the end
 
@@ -162,8 +162,11 @@ def log_json(txt_input: str):
 
     json_output = 'run_log.json'
 
+    pretty_json = json.dumps(data, indent=4)
+
     with open(json_output, 'w') as json_file:
-        json.dump(data, json_file)
+        for line in pretty_json:
+            json_file.write(f"{line}")    # idx-1 -> dont include the space at the end
 
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
@@ -199,7 +202,7 @@ if __name__ == "__main__":
             print(type(labels))
 
             txt_file = ''
-            txt_file = out_log(labels, confidence=False)
+            txt_file = out_log(labels, confidence=True)
             log_json(txt_file)
             
             #print(predictions["instances"].pred_classes)
