@@ -11,6 +11,9 @@ import cv2
 import tqdm
 import sys
 import mss
+import json
+import torch
+
 
 from detectron2.config import get_cfg
 from detectron2.data.detection_utils import read_image
@@ -127,46 +130,35 @@ def test_opencv_video_format(codec, file_ext):
             return True
         return False
 
-# Logging added
-def out_log(labels: list, confidence: bool):
-    idx = 0
+def create_log_files(file_name: str, save_location: str, labels: list, confidence: bool):
 
-    log_name = 'run_log.txt'
+    log_name = os.path.join(save_location, f"{file_name}.txt")
+    json_output = os.path.join(save_location, f"{file_name}.json")
 
-    if confidence == False:     ## Not including prediction percentages
-        with open(log_name, 'w') as f:
-            for line in labels:
-                for chr in line:
-                    if chr.isdigit():
-                        idx = line.index(chr)
-                        idx -= 1                        # Dont include the first number
-
-                f.write(f"{str(line[0 : idx])}\n")      # idx-1 -> dont include the space at the end
-    else:                       
-        with open(log_name, 'a+') as f:
-            for line in labels:
-                f.write(f"{line}\n")    # idx-1 -> dont include the space at the end
-
-    return log_name
-
-def log_json(txt_input: str):
-    import json
-
-    with open(txt_input, 'r') as file:
-        items = [line.strip() for line in file.readlines()]
-
-    data = {
-        "totalItems": len(items),
-        "objects": items
-    }
-
-    json_output = 'run_log.json'
-
-    pretty_json = json.dumps(data, indent=4)
+    items_count = {}
+    with open(log_name, 'a+' if confidence else 'w') as log_file:
+        for line in labels:
+            if confidence:
+                log_file.write(f"{line}\n")
+            else:
+                item_name = ' '.join(line.split()[:-1])
+                log_file.write(f"{item_name}\n")
+                items_count[item_name] = items_count.get(item_name, 0) + 1
 
     with open(json_output, 'w') as json_file:
-        for line in pretty_json:
-            json_file.write(f"{line}")    # idx-1 -> dont include the space at the end
+        total_items = sum(items_count.values())
+        data = {"totalItems": total_items, "uniqueObjects": len(items_count), "objects": items_count}
+        json.dump(data, json_file, indent=4)
+
+def convert_coordinates(boxes):
+
+    x0, y0, x1, y1 = torch.unbind(boxes, dim=1)
+    x = x0
+    y = y0
+    w = x1 - x0
+    h = y1 - y0
+
+    return torch.stack([x, y, w, h], dim=1)
 
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
@@ -196,16 +188,6 @@ if __name__ == "__main__":
                     time.time() - start_time,
                 )
             )
-            
-            #print(predictions)
-            print(labels)
-            print(type(labels))
-
-            txt_file = ''
-            txt_file = out_log(labels, confidence=True)
-            log_json(txt_file)
-            
-            #print(predictions["instances"].pred_classes)
 
             if args.output:
                 if os.path.isdir(args.output):
@@ -214,13 +196,30 @@ if __name__ == "__main__":
                 else:
                     assert len(args.input) == 1, "Please specify a directory with args.output"
                     out_filename = args.output
+
+                #### Creates the list of detected objects in both .txt and .json
                 visualized_output.save(out_filename)
+                save_location, file_name = os.path.split(out_filename)
+                base_file_name, _ = os.path.splitext(file_name)
+                create_log_files(base_file_name, save_location, labels, confidence=False)
+                ####
+
+                ####### Comment this section if you don't want to return the mask tensor
+                instances_dict = {
+                    'pred_boxes': convert_coordinates((predictions['instances'].pred_boxes).tensor),
+                    'scores': predictions['instances'].scores,
+                    'classes': labels,
+                    'pred_masks' : predictions['instances'].pred_masks
+                }
+
+                torch.save(instances_dict, os.path.join(save_location, f"{base_file_name}.pt"))
+                ########
+                
             else:
                 cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
                 cv2.imshow(WINDOW_NAME, visualized_output.get_image()[:, :, ::-1])
                 if cv2.waitKey(0) == 27:
                     break  # esc to quit
-        
     elif args.webcam:
         assert args.input is None, "Cannot have both --input and --webcam!"
         assert args.output is None, "output not yet supported with --webcam!"
